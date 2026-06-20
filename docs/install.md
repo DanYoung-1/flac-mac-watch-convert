@@ -23,6 +23,14 @@ That will:
 - write `com.admin.flacwatch` into `~/Library/LaunchAgents/`
 - start the LaunchAgent immediately
 
+You can also pass explicit source and destination folders:
+
+```sh
+./scripts/install-flac-watch.sh "$HOME/Downloads/music-torrents" "/Volumes/Music Storage/Music/Media.localized/Automatically Add to Music.localized"
+```
+
+Those paths are written into the LaunchAgent so the watcher starts with the exact folders you chose.
+
 ## Optional: make `flac-watch` available in your shell
 
 The repo also creates a launcher at `~/bin/flac-watch`. If `~/bin` is not already on your `PATH`, add it to `~/.zshrc`:

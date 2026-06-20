@@ -9,6 +9,8 @@
   <array>
     <string>/bin/zsh</string>
     <string>__WATCHER_PATH__</string>
+    <string>__SRC_DIR__</string>
+    <string>__DEST_DIR__</string>
   </array>
 
   <key>RunAtLoad</key>

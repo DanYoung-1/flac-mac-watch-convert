@@ -8,6 +8,10 @@ PLIST_DEST="$HOME/Library/LaunchAgents/com.admin.flacwatch.plist"
 LOG_DIR="$HOME/Library/Logs/flac-watch"
 STDOUT_PATH="$LOG_DIR/launchd.out.log"
 STDERR_PATH="$LOG_DIR/launchd.err.log"
+DEFAULT_SRC_DIR="$HOME/Downloads/music-torrents"
+DEFAULT_DEST_DIR="/Volumes/Music Storage/Music/Media.localized/Automatically Add to Music.localized"
+SRC_DIR="${1:-$DEFAULT_SRC_DIR}"
+DEST_DIR="${2:-$DEFAULT_DEST_DIR}"
 
 if ! command -v ffmpeg >/dev/null 2>&1; then
   print -u2 "ffmpeg is not installed yet; MP3 copies will still work, but FLAC conversion will be skipped until ffmpeg is available."
@@ -24,14 +28,14 @@ fi
 
 mkdir -p "$HOME/Library/LaunchAgents"
 mkdir -p "$LOG_DIR"
-WATCHER_PATH="$SCRIPT_PATH" STDOUT_PATH="$STDOUT_PATH" STDERR_PATH="$STDERR_PATH" perl -0pe 's|__WATCHER_PATH__|$ENV{WATCHER_PATH}|g; s|__STDOUT_PATH__|$ENV{STDOUT_PATH}|g; s|__STDERR_PATH__|$ENV{STDERR_PATH}|g' "$PLIST_SOURCE" > "$PLIST_DEST"
+WATCHER_PATH="$SCRIPT_PATH" SRC_DIR="$SRC_DIR" DEST_DIR="$DEST_DIR" STDOUT_PATH="$STDOUT_PATH" STDERR_PATH="$STDERR_PATH" perl -0pe 's|__WATCHER_PATH__|$ENV{WATCHER_PATH}|g; s|__SRC_DIR__|$ENV{SRC_DIR}|g; s|__DEST_DIR__|$ENV{DEST_DIR}|g; s|__STDOUT_PATH__|$ENV{STDOUT_PATH}|g; s|__STDERR_PATH__|$ENV{STDERR_PATH}|g' "$PLIST_SOURCE" > "$PLIST_DEST"
 
 launchctl unload "$PLIST_DEST" 2>/dev/null || true
 launchctl load "$PLIST_DEST"
 
 print "Installed and started: com.admin.flacwatch"
-print "Watch root: $HOME/Downloads/music-torrents"
-print "Music import folder: /Volumes/Music Storage/Music/Media.localized/Automatically Add to Music.localized"
+print "Watch root: $SRC_DIR"
+print "Music import folder: $DEST_DIR"
 print "Logs:"
 print "  script: $LOG_DIR/flac-watch.log"
 print "  launchd stdout: $STDOUT_PATH"

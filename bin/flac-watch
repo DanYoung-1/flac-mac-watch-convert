@@ -3,8 +3,8 @@ set -euo pipefail
 setopt null_glob
 
 VERSION="0.1.0"
-DEFAULT_SRC_DIR="$HOME/Downloads/music-torrents"
-DEFAULT_DEST_DIR="/Volumes/Music Storage/Music/Media.localized/Automatically Add to Music.localized"
+DEFAULT_SRC_DIR="${FLAC_WATCH_SRC_DIR:-$HOME/Downloads/music-torrents}"
+DEFAULT_DEST_DIR="${FLAC_WATCH_DEST_DIR:-/Volumes/Music Storage/Music/Media.localized/Automatically Add to Music.localized}"
 LOG_PREFIX="[flac-watch]"
 LOG_FILE="${FLAC_WATCH_LOG_FILE:-$HOME/Library/Logs/flac-watch/flac-watch.log}"
 MODE="watch"
@@ -49,6 +49,10 @@ Commands:
 Defaults:
   source-dir  $DEFAULT_SRC_DIR
   dest-dir    $DEFAULT_DEST_DIR
+
+Environment:
+  FLAC_WATCH_SRC_DIR   Override the default watched folder.
+  FLAC_WATCH_DEST_DIR  Override the default destination folder.
 EOF
 }
 
