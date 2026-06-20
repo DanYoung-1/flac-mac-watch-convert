@@ -1,0 +1,243 @@
+#!/bin/zsh
+set -euo pipefail
+setopt null_glob
+
+MODE="watch"
+
+if [[ "${1:-}" == "--once" || "${1:-}" == "once" || "${1:-}" == "-1" ]]; then
+  MODE="once"
+  shift
+elif [[ "${1:-}" == "--watch" ]]; then
+  shift
+fi
+
+SRC_DIR="${1:-$HOME/Downloads/music-torrents}"
+DEST_DIR="${2:-/Volumes/Music Storage/Music/Media.localized/Automatically Add to Music.localized}"
+LOG_PREFIX="[flac-watch]"
+LOG_FILE="${FLAC_WATCH_LOG_FILE:-$HOME/Library/Logs/flac-watch/flac-watch.log}"
+PROCESSED_DIR="${FLAC_WATCH_PROCESSED_DIR:-$SRC_DIR/_processed}"
+
+resolve_bin() {
+  local name="$1"
+  shift
+  local candidate
+
+  candidate="$(command -v "$name" 2>/dev/null || true)"
+  if [[ -n "$candidate" ]]; then
+    print -r -- "$candidate"
+    return 0
+  fi
+
+  for candidate in "$@"; do
+    [[ -x "$candidate" ]] && { print -r -- "$candidate"; return 0; }
+  done
+
+  return 1
+}
+
+log() {
+  local message timestamp
+  timestamp="$(/bin/date '+%Y-%m-%d %H:%M:%S')"
+  message="$timestamp $LOG_PREFIX $*"
+  print -r -- "$message" >&2
+  if [[ -n "$LOG_FILE" ]]; then
+    mkdir -p "${LOG_FILE:h}" 2>/dev/null || true
+    print -r -- "$message" >> "$LOG_FILE" 2>/dev/null || true
+  fi
+}
+
+FSWATCH_BIN="$(resolve_bin fswatch /opt/homebrew/bin/fswatch /usr/local/bin/fswatch || true)"
+FFMPEG_BIN="$(resolve_bin ffmpeg /opt/homebrew/bin/ffmpeg /usr/local/bin/ffmpeg || true)"
+
+if [[ "$MODE" != "once" && -z "$FSWATCH_BIN" ]]; then
+  log "fswatch is not installed"
+  exit 1
+fi
+
+mkdir -p "$DEST_DIR"
+mkdir -p "${LOG_FILE:h}" 2>/dev/null || true
+mkdir -p "$PROCESSED_DIR" 2>/dev/null || true
+log "starting mode=$MODE src=$SRC_DIR dest=$DEST_DIR processed=$PROCESSED_DIR log=$LOG_FILE"
+
+convert_file() {
+  local f="$1"
+  local rel out out_dir tmp prev_size size tries ext base
+
+  [[ -f "$f" ]] || return 0
+  ext="${f##*.}"
+  ext="${ext:l}"
+  [[ "$ext" == "flac" || "$ext" == "mp3" ]] || return 0
+
+  rel="${f#$SRC_DIR/}"
+  [[ "$rel" == "$f" ]] && rel="${f:t}"
+  base="${rel%.*}"
+
+  if [[ "$ext" == "flac" ]]; then
+    out="$DEST_DIR/$base.m4a"
+  else
+    out="$DEST_DIR/$base.mp3"
+  fi
+  out_dir="${out:h}"
+  mkdir -p "$out_dir"
+
+  if [[ -s "$out" ]]; then
+    log "skipping existing output: ${out#$DEST_DIR/}"
+    archive_source "$f" "$rel"
+    return 0
+  fi
+
+  # Wait until the file stops growing so we do not convert partial downloads.
+  tries=0
+  prev_size=-1
+  while (( tries < 30 )); do
+    size=$(stat -f%z "$f" 2>/dev/null || print -r -- 0)
+    [[ "$size" == "$prev_size" ]] && break
+    prev_size="$size"
+    sleep 1
+    (( ++tries ))
+  done
+
+  if [[ "$ext" == "flac" ]]; then
+    if [[ -z "$FFMPEG_BIN" ]]; then
+      log "ffmpeg is not installed; cannot convert: $rel"
+      return 0
+    fi
+    tmp="${out}.tmp.m4a"
+    log "converting: $rel"
+    if "$FFMPEG_BIN" -v error -y -i "$f" -map 0:a:0 -c:a alac "$tmp"; then
+      mv -f "$tmp" "$out"
+    else
+      rm -f "$tmp"
+      log "failed: $rel"
+    fi
+  else
+    log "copying: $rel"
+    cp -f "$f" "$out"
+  fi
+
+  if [[ -s "$out" ]]; then
+    log "wrote: ${out#$DEST_DIR/}"
+    archive_source "$f" "$rel"
+  fi
+}
+
+archive_source() {
+  local f="$1"
+  local rel="$2"
+  local processed_path processed_dir dir
+
+  [[ -f "$f" ]] || return 0
+  processed_path="$PROCESSED_DIR/$rel"
+  processed_dir="${processed_path:h}"
+  mkdir -p "$processed_dir"
+  mv -f "$f" "$processed_path"
+  log "moved source to processed: ${processed_path#$SRC_DIR/}"
+
+  # Prune empty parent folders up to, but not including, the watched root.
+  dir="${f:h}"
+  while [[ "$dir" != "$SRC_DIR" && "$dir" == "$SRC_DIR"/* ]]; do
+    rmdir "$dir" 2>/dev/null || break
+    dir="${dir:h}"
+  done
+}
+
+directory_is_ready() {
+  local dir="$1"
+  local name item_path size1 size2 original_pwd
+
+  original_pwd="$PWD"
+  builtin cd "$dir" 2>/dev/null || return 1
+
+  for name in *; do
+    [[ -f "$name" ]] || continue
+    item_path="$PWD/$name"
+    case "${name:l}" in
+      (*.part|*.part*|*.tmp|*.aria2|*.!qb|*.qb)
+        log "skipping not-ready folder: ${dir#$SRC_DIR/} (incomplete marker: $name)"
+        builtin cd "$original_pwd" 2>/dev/null || true
+        return 1
+        ;;
+    esac
+  done
+
+  for name in *; do
+    [[ -f "$name" ]] || continue
+    item_path="$PWD/$name"
+    case "${name:l}" in
+      (*.flac|*.mp3)
+        size1=$(stat -f%z "$item_path" 2>/dev/null || print -r -- 0)
+        sleep 1
+        size2=$(stat -f%z "$item_path" 2>/dev/null || print -r -- 0)
+        if [[ "$size1" != "$size2" ]]; then
+          log "skipping not-ready folder: ${dir#$SRC_DIR/} (file still growing: ${item_path#$SRC_DIR/})"
+          builtin cd "$original_pwd" 2>/dev/null || true
+          return 1
+        fi
+        ;;
+    esac
+  done
+
+  builtin cd "$original_pwd" 2>/dev/null || true
+  return 0
+}
+
+process_directory() {
+  local dir="$1" name item_path original_pwd
+
+  [[ -d "$dir" ]] || return 0
+  [[ "$dir" == "$PROCESSED_DIR" || "$dir" == "$PROCESSED_DIR"/* ]] && return 0
+  directory_is_ready "$dir" || return 0
+  log "processing folder: ${dir#$SRC_DIR/}"
+
+  original_pwd="$PWD"
+  builtin cd "$dir" 2>/dev/null || return 0
+
+  for name in *; do
+    [[ -f "$name" ]] || continue
+    item_path="$PWD/$name"
+    case "${name:l}" in
+      (*.flac|*.mp3)
+        convert_file "$item_path"
+        ;;
+    esac
+  done
+
+  for name in *; do
+    [[ -d "$name" ]] || continue
+    item_path="$PWD/${name%/}"
+    [[ "$item_path" == "$PROCESSED_DIR" || "$item_path" == "$PROCESSED_DIR"/* ]] && continue
+    log "saw subdir: ${item_path#$SRC_DIR/}"
+    process_directory "$item_path"
+  done
+
+  builtin cd "$original_pwd" 2>/dev/null || true
+}
+
+export SRC_DIR DEST_DIR
+
+run_once() {
+  log "running one-shot scan"
+  process_directory "$SRC_DIR"
+}
+
+run_watch() {
+  # Process anything already present, then watch for new arrivals.
+  run_once
+
+  log "watching for changes"
+  "$FSWATCH_BIN" -0 -r "$SRC_DIR" | while IFS= read -r -d '' changed; do
+    if [[ -d "$changed" ]]; then
+      log "change detected folder: ${changed#$SRC_DIR/}"
+      process_directory "$changed"
+    else
+      log "change detected file: ${changed#$SRC_DIR/}"
+      process_directory "${changed:h}"
+    fi
+  done
+}
+
+if [[ "$MODE" == "once" ]]; then
+  run_once
+else
+  run_watch
+fi
