@@ -49,7 +49,7 @@ flac-watch --watch
 
 ## Docs
 
-- [Install](/Users/admin/Code/flac-watch/docs/install.md)
-- [Testing](/Users/admin/Code/flac-watch/docs/testing.md)
-- [Launchd](/Users/admin/Code/flac-watch/docs/launchd.md)
-- [Troubleshooting](/Users/admin/Code/flac-watch/docs/troubleshooting.md)
+- [Install](docs/install.md)
+- [Testing](docs/testing.md)
+- [Launchd](docs/launchd.md)
+- [Troubleshooting](docs/troubleshooting.md)

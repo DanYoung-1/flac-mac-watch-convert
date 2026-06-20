@@ -8,9 +8,9 @@ The LaunchAgent runs the watcher under `zsh` and keeps it alive so new files are
 
 ## Relevant files
 
-- [launchd/com.admin.flacwatch.plist](/Users/admin/Code/flac-watch/launchd/com.admin.flacwatch.plist)
-- [scripts/install-flac-watch.sh](/Users/admin/Code/flac-watch/scripts/install-flac-watch.sh)
-- [bin/flac-watch](/Users/admin/Code/flac-watch/bin/flac-watch)
+- [launchd/com.admin.flacwatch.plist](../launchd/com.admin.flacwatch.plist)
+- [scripts/install-flac-watch.sh](../scripts/install-flac-watch.sh)
+- [bin/flac-watch](../bin/flac-watch)
 
 ## Install flow
 
